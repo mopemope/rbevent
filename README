@@ -1,0 +1,24 @@
+rbevent is ruby extension library for libevent 
+
+
+require 'rbevent'
+require 'socket'
+
+include(RubyEvent)
+include(RubyEvent::Constants)
+event_init();
+
+serv = Socket.new(Socket::AF_INET, Socket::SOCK_STREAM, 0)
+sockaddr = Socket.sockaddr_in(6000, "127.0.0.1")
+serv.bind(sockaddr)
+serv.listen(5)
+
+evt = Event.new(serv.to_i, EV_READ){|evt|
+    p "readable"
+    event_abort();
+}
+evt.add()
+
+event_dispatch()
+
+
