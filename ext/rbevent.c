@@ -163,6 +163,7 @@ signm2signo(const char *nm)
     return 0;
 }
 
+/* RubyEvent.event_init */
 static void 
 frb_event_init(VALUE obj){
     event_init();
@@ -216,8 +217,23 @@ fevent_get_fileno(VALUE obj)
     return INT2NUM(fd);
 }
 
+static void
+add_event_with_timeout(struct eventdata *data,  VALUE timeout)
+{
+    struct timeval time;
+    struct timeval *ptime;
 
-//Event.new(fd, type, &block)
+    if(!NIL_P(timeout)){
+        time.tv_sec = NUM2INT(timeout);
+        time.tv_usec = 0;
+        ptime = &time;
+    }else{
+        ptime = NULL;
+    }
+    event_add(&(data->ev), ptime);
+}
+
+/* Event.new(fd, type, &block) */
 static VALUE
 fevent_initialize(int argc, VALUE *argv, VALUE obj)
 {
@@ -230,19 +246,17 @@ fevent_initialize(int argc, VALUE *argv, VALUE obj)
     int fd = NUM2INT(vident);
     int type = NUM2INT(vtype);
     
-    //event_set(&ev, fd, type, fevent_callback, &obj);
-
     data = ALLOC(struct eventdata);
     DATA_PTR(obj) = data;
     data->ev = ev;
     data->proc = vproc;
-    //printf("ev %d\n", ev.ev_fd);
+    
     event_set(&(data->ev), fd, type, fevent_callback, (void *)obj);
     
     return obj;
 }
 
-//SignalEvent.new(fd, type, &block)
+/* SignalEvent.new(signm, type, &block) */
 static VALUE
 fsignal_event_initialize(int argc, VALUE *argv, VALUE obj)
 {
@@ -264,54 +278,40 @@ fsignal_event_initialize(int argc, VALUE *argv, VALUE obj)
     
     int type = NUM2INT(vtype);
     
-    //event_set(&ev, fd, type, fevent_callback, &obj);
-
     data = ALLOC(struct eventdata);
     DATA_PTR(obj) = data;
     data->ev = ev;
     data->proc = vproc;
-    //printf("ev %d\n", ev.ev_fd);
+
     event_set(&(data->ev), signo, type, fevent_callback, (void *)obj);
     
     return obj;
 }
 
 
-//TimerEvent(timout, &block)
+/* TimerEvent.new(timout, &block) */
 static VALUE
 ftimer_event_initialize(int argc, VALUE *argv, VALUE obj)
 {
     //event
     struct eventdata *data;
     struct event ev;
-    struct timeval time;
-    struct timeval *ptime;
     VALUE vtimeout, vproc;
 
     rb_scan_args(argc, argv, "1&", &vtimeout, &vproc);
-    //int sec = NUM2INT(vtimeout);
     
-    //event_set(&ev, fd, type, fevent_callback, &obj);
-
     data = ALLOC(struct eventdata);
     DATA_PTR(obj) = data;
     data->ev = ev;
     data->proc = vproc;
-    //printf("ev %d\n", ev.ev_fd);
+    
 	evtimer_set(&(data->ev), fevent_callback, (void *)obj);
     
-    if(!NIL_P(vtimeout)){
-        time.tv_sec = NUM2INT(vtimeout);
-        time.tv_usec = 0;
-        ptime = &time;
-    }else{
-        ptime = NULL;
-    }
-    event_add(&(data->ev), ptime);
-        
+    add_event_with_timeout(data, vtimeout);
     return obj;
 }
 
+/* Event.add(timout) */
 static VALUE 
 fevent_add(int argc, VALUE *argv,  VALUE obj)
 {
@@ -324,15 +324,7 @@ fevent_add(int argc, VALUE *argv,  VALUE obj)
     
     Data_Get_Struct(obj, struct eventdata, data);
     
-    if(!NIL_P(vtimeout)){
-        //printf("timout %d\n", NUM2INT(vtimeout));
-        time.tv_sec = NUM2INT(vtimeout);
-        time.tv_usec = 0;
-        ptime = &time;
-    }else{
-        ptime = NULL;
-    }
-    event_add(&(data->ev), ptime);
+    add_event_with_timeout(data, vtimeout);
     return Qnil;
 }
 
@@ -343,6 +335,62 @@ fevent_del(VALUE obj)
     Data_Get_Struct(obj, struct eventdata, data);
     event_del(&(data->ev));
     return Qnil;
+}
+
+static VALUE
+fcreate_event(VALUE fd, VALUE type, VALUE proc)
+{
+    struct eventdata *data;
+    VALUE obj, klass, sym_new;
+
+    klass = rb_eval_string("Event");
+    sym_new = rb_intern("new");
+    obj = rb_funcall(klass, sym_new, 2, fd, type, proc);
+    
+    Data_Get_Struct(obj, struct eventdata, data);
+    add_event_with_timeout(data, Qnil);
+    return obj;
+
+}
+
+/* RubyEvent.add_read(fd, &cb) */
+static VALUE
+frb_event_add_read(int argc, VALUE *argv, VALUE mod)
+{
+    struct eventdata *data;
+    VALUE vfd, vproc;
+    rb_scan_args(argc, argv, "1&", &vfd, &vproc);
+    return fcreate_event(vfd, INT2NUM(EV_READ), vproc);;
+}
+
+/* RubyEvent.add_write(fd, &cb) */
+static VALUE
+frb_event_add_write(int argc, VALUE *argv, VALUE mod)
+{
+    struct eventdata *data;
+    VALUE vfd, vproc;
+    rb_scan_args(argc, argv, "1&", &vfd, &vproc);
+    return fcreate_event(vfd, INT2NUM(EV_WRITE), vproc);;
+}
+
+/* RubyEvent.add_read(fd, &cb) */
+static VALUE
+frb_event_add_read_persist(int argc, VALUE *argv, VALUE mod)
+{
+    struct eventdata *data;
+    VALUE vfd, vproc;
+    rb_scan_args(argc, argv, "1&", &vfd, &vproc);
+    return fcreate_event(vfd, INT2NUM(EV_READ|EV_PERSIST), vproc);;
+}
+
+/* RubyEvent.add_write(fd, &cb) */
+static VALUE
+frb_event_add_write_persist(int argc, VALUE *argv, VALUE mod)
+{
+    struct eventdata *data;
+    VALUE vfd, vproc;
+    rb_scan_args(argc, argv, "1&", &vfd, &vproc);
+    return fcreate_event(vfd, INT2NUM(EV_WRITE|EV_PERSIST), vproc);;
 }
 
 static VALUE
@@ -362,13 +410,18 @@ frb_event_dispatch(VALUE obj)
 
 void
 Init_rbevent(void){
+
     rb_mRubyEvent = rb_define_module("RubyEvent");
     rb_define_module_function(rb_mRubyEvent, "event_init", frb_event_init, 0);
     rb_define_module_function(rb_mRubyEvent, "event_dispatch", frb_event_dispatch, 0);
     rb_define_module_function(rb_mRubyEvent, "event_abort", frb_event_abort, 0);
+    rb_define_module_function(rb_mRubyEvent, "add_r", frb_event_add_read, -1);
+    rb_define_module_function(rb_mRubyEvent, "add_w", frb_event_add_write, -1);
+    rb_define_module_function(rb_mRubyEvent, "add_rp", frb_event_add_read_persist, -1);
+    rb_define_module_function(rb_mRubyEvent, "add_wp", frb_event_add_write_persist, -1);
 
-    rb_mRubyEventConst = rb_define_module_under(rb_mRubyEvent, "Constants");
     //RubyEvent::Constants
+    rb_mRubyEventConst = rb_define_module_under(rb_mRubyEvent, "Constants");
 
     rb_define_const(rb_mRubyEventConst, "EVLIST_TIMEOUT", INT2FIX(EVLIST_TIMEOUT));
     rb_define_const(rb_mRubyEventConst, "EVLIST_INSERTED", INT2FIX(EVLIST_INSERTED));
