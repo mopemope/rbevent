@@ -1,5 +1,22 @@
-rbevent is ruby extension library for libevent 
+====================
+rbevent 
+====================
+rbevent is ruby extension library for libeveint.
+api design inspired pyevent (python libevent module)
 
+Requirements
+-------------
+
++ ruby 1.9
++ libevent 
+
+Installation
+------------
+
+> sudo ruby setup.rb
+
+simple sample code
+------------
 
 require 'rbevent'
 require 'socket'
